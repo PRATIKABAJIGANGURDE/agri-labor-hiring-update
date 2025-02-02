@@ -20,10 +20,7 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: false, // Set to true only if you want to deploy despite ESLint errors
   },
-  experimental: {
-    outputFileTracingRoot: process.cwd(), // For better standalone output
-    outputStandalone: true,
-  },
+  outputFileTracingRoot: process.cwd(), // For better standalone output
 }
 
 module.exports = nextConfig
