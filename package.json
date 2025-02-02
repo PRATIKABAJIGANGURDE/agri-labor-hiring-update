@@ -8,8 +8,6 @@
     "start": "next start",
     "lint": "next lint",
     "clean": "if exist .next rmdir /s /q .next",
-    "prebuild": "npm run clean",
-    "postbuild": "next-sitemap --config next-sitemap.config.js",
     "analyze": "cross-env ANALYZE=true next build"
   },
   "dependencies": {
