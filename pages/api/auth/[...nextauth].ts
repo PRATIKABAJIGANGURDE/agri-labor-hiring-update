@@ -1,6 +1,5 @@
 import NextAuth, { NextAuthOptions, DefaultSession } from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
-import { JWT } from "next-auth/jwt"
 import { supabase } from '@/lib/supabase'
 
 declare module "next-auth" {
@@ -10,6 +9,7 @@ declare module "next-auth" {
       email: string
       name: string
       image?: string
+      role?: string
     } & DefaultSession["user"]
   }
 }
@@ -26,23 +26,51 @@ export const authOptions: NextAuthOptions = {
     error: '/auth/error',
   },
   callbacks: {
-    async signIn({ user, account }) {
+    async signIn({ user, account, profile }: { 
+      user: any; 
+      account: any; 
+      profile?: any 
+    }) {
       if (!user.email) return false
 
       try {
-        const { data: { user: supabaseUser }, error } = await supabase.auth.signInWithOAuth({
+        // Sign in with Supabase
+        const { data: authData, error: authError } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            queryParams: {
-              access_token: account?.access_token,
-              expires_in: account?.expires_at,
-            },
-          },
+            redirectTo: `${process.env.NEXTAUTH_URL}/auth/callback`
+          }
         })
 
-        if (error) {
-          console.error('Supabase auth error:', error)
+        if (authError) {
+          console.error('Supabase auth error:', authError)
           return false
+        }
+
+        // Check if user exists in our users table
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', authData.user?.id)
+          .single()
+
+        if (!existingUser) {
+          // Create new user if doesn't exist
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert([
+              {
+                id: authData.user?.id,
+                email: user.email,
+                full_name: user.name,
+                avatar_url: user.image,
+              }
+            ])
+
+          if (insertError) {
+            console.error('Error creating user:', insertError)
+            return false
+          }
         }
 
         return true
@@ -53,7 +81,17 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.sub as string
+        // Get user data from Supabase
+        const { data: userData } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', session.user.email)
+          .single()
+
+        if (userData) {
+          session.user.id = userData.id
+          session.user.role = userData.role
+        }
       }
       return session
     },

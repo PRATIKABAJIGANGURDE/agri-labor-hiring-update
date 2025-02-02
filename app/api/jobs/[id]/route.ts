@@ -1,20 +1,18 @@
 import { NextResponse } from "next/server"
-import { ObjectId } from "mongodb"
-import clientPromise from "@/lib/mongodb"
+import { supabase } from "@/lib/supabase"
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const client = await clientPromise
-    const db = client.db("agri")
+    const { data: job, error } = await supabase
+      .from("jobs")
+      .select("*")
+      .eq("id", params.id)
+      .single()
 
-    const job = await db.collection("jobs").findOne({
-      _id: new ObjectId(params.id)
-    })
-
-    if (!job) {
+    if (error || !job) {
       return NextResponse.json(
         { message: "Job not found" },
         { status: 404 }

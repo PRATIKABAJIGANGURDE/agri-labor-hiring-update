@@ -1,29 +1,32 @@
-import clientPromise from "@/lib/mongodb"
+import { NextResponse } from "next/server"
+import { supabase } from "@/lib/supabase"
 
 export async function POST(request: Request) {
   try {
-    const client = await clientPromise
-    const db = client.db("agri")
     const { title, description, location, skills, paymentType, amount, startDate, endDate } = await request.json()
 
-    const job = {
-      title,
-      description,
-      location,
-      skills,
-      paymentType,
-      amount,
-      startDate,
-      endDate,
-      createdAt: new Date(),
-    }
+    const { data: job, error } = await supabase
+      .from("jobs")
+      .insert([{
+        title,
+        description,
+        location,
+        skills,
+        payment_type: paymentType,
+        amount,
+        start_date: startDate,
+        end_date: endDate,
+        created_at: new Date().toISOString()
+      }])
+      .select()
+      .single()
 
-    const result = await db.collection("jobs").insertOne(job)
+    if (error) throw error
 
-    return NextResponse.json({ message: "Job created successfully", jobId: result.insertedId }, { status: 201 })
+    return NextResponse.json({ message: "Job created successfully", job }, { status: 201 })
   } catch (e) {
     console.error("Error in POST /api/jobs:", e)
-    return NextResponse.json({ message: "Error creating job. Please check your database connection." }, { status: 500 })
+    return NextResponse.json({ message: "Error creating job" }, { status: 500 })
   }
 }
 
@@ -35,38 +38,33 @@ export async function GET(request: Request) {
     const paymentType = searchParams.get('paymentType')
     const maxDistance = searchParams.get('distance')
 
-    const client = await clientPromise
-    const db = client.db("agri")
-
-    let query: any = {}
+    let query = supabase
+      .from("jobs")
+      .select("*")
 
     if (searchTerm) {
-      query.$or = [
-        { title: { $regex: searchTerm, $options: 'i' } },
-        { description: { $regex: searchTerm, $options: 'i' } },
-        { skills: { $in: [new RegExp(searchTerm, 'i')] } }
-      ]
+      query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
     }
 
     if (jobType) {
-      query.jobType = jobType
+      query = query.eq('job_type', jobType)
     }
 
     if (paymentType) {
-      query.paymentType = paymentType
+      query = query.eq('payment_type', paymentType)
     }
 
-    const jobs = await db.collection("jobs")
-      .find(query)
-      .sort({ createdAt: -1 })
-      .toArray()
+    // Note: For distance-based queries, you'll need PostGIS extension in Supabase
+    // This is a simplified version without distance calculation
+    
+    const { data: jobs, error } = await query
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
 
     return NextResponse.json(jobs)
   } catch (e) {
     console.error("Error in GET /api/jobs:", e)
-    return NextResponse.json(
-      { message: "Error fetching jobs. Please try again later." },
-      { status: 500 }
-    )
+    return NextResponse.json({ message: "Error fetching jobs" }, { status: 500 })
   }
 }

@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  distDir: 'dist',
   images: {
     domains: [
       'lh3.googleusercontent.com', // For Google OAuth profile pictures
@@ -18,6 +19,10 @@ const nextConfig = {
   },
   eslint: {
     ignoreDuringBuilds: false, // Set to true only if you want to deploy despite ESLint errors
+  },
+  experimental: {
+    outputFileTracingRoot: process.cwd(), // For better standalone output
+    outputStandalone: true,
   },
 }
 
