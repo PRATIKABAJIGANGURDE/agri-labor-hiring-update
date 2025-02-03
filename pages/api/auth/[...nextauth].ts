@@ -34,25 +34,17 @@ export const authOptions: NextAuthOptions = {
       if (!user.email) return false
 
       try {
-        // Sign in with Supabase
-        const { data: authData, error: authError } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: `${process.env.NEXTAUTH_URL}/auth/callback`
-          }
-        })
-
-        if (authError) {
-          console.error('Supabase auth error:', authError)
-          return false
-        }
-
         // Check if user exists in our users table
-        const { data: existingUser } = await supabase
+        const { data: existingUser, error } = await supabase
           .from('users')
           .select('*')
-          .eq('id', authData.user?.id)
+          .eq('email', user.email)
           .single()
+
+        if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          console.error('Error checking user:', error)
+          return false
+        }
 
         if (!existingUser) {
           // Create new user if doesn't exist
@@ -60,10 +52,11 @@ export const authOptions: NextAuthOptions = {
             .from('users')
             .insert([
               {
-                id: authData.user?.id,
                 email: user.email,
                 full_name: user.name,
                 avatar_url: user.image,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
               }
             ])
 
@@ -102,21 +95,20 @@ export const authOptions: NextAuthOptions = {
       return token
     },
     async redirect({ url, baseUrl }) {
+      // After sign in, redirect to the home page
+      if (url.startsWith('/auth/signin')) {
+        return '/'
+      }
       // If the url starts with a slash, prepend the base url
       if (url.startsWith('/')) {
         return `${baseUrl}${url}`
       }
       // If the url is already a valid URL, return it
-      else if (url.startsWith('http')) {
+      if (url.startsWith('http')) {
         return url
       }
-      // Default to the base url
-      return baseUrl
-    }
-  },
-  events: {
-    async signOut({ token }) {
-      await supabase.auth.signOut()
+      // Default to the home page
+      return '/'
     }
   }
 }
