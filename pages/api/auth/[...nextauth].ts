@@ -1,6 +1,7 @@
 import NextAuth, { NextAuthOptions, DefaultSession } from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import { supabase } from '@/lib/supabase'
+import { getSession } from "next-auth/react"
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
@@ -31,44 +32,33 @@ export const authOptions: NextAuthOptions = {
       account: any; 
       profile?: any 
     }) {
-      if (!user.email) return false
+      console.log('SignIn attempt:', { 
+        email: user.email,
+        name: user.name,
+        provider: account?.provider
+      })
+
+      if (!user.email) {
+        console.error('Sign in failed: No email provided')
+        return false
+      }
 
       try {
-        // Check if user exists in our users table
         const { data: existingUser, error } = await supabase
           .from('users')
           .select('*')
           .eq('email', user.email)
           .single()
 
-        if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-          console.error('Error checking user:', error)
-          return false
-        }
-
         if (!existingUser) {
-          // Create new user if doesn't exist
-          const { error: insertError } = await supabase
-            .from('users')
-            .insert([
-              {
-                email: user.email,
-                full_name: user.name,
-                avatar_url: user.image,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              }
-            ])
-
-          if (insertError) {
-            console.error('Error creating user:', insertError)
-            return false
-          }
+          // If user doesn't exist, redirect them to user type selection
+          return '/auth/user-type-select'
         }
 
+        // If user exists, continue with sign in
         return true
       } catch (error) {
-        console.error('Error in signIn callback:', error)
+        console.error('Error during sign in:', error)
         return false
       }
     },
@@ -95,21 +85,14 @@ export const authOptions: NextAuthOptions = {
       return token
     },
     async redirect({ url, baseUrl }) {
-      // After sign in, redirect to the home page
-      if (url.startsWith('/auth/signin')) {
-        return '/'
-      }
-      // If the url starts with a slash, prepend the base url
-      if (url.startsWith('/')) {
+      // If the url is the user type selection page, allow it
+      if (url.startsWith('/auth/user-type-select')) {
         return `${baseUrl}${url}`
       }
-      // If the url is already a valid URL, return it
-      if (url.startsWith('http')) {
-        return url
-      }
-      // Default to the home page
-      return '/'
-    }
+
+      // Allow the default callback url
+      return url.startsWith(baseUrl) ? url : baseUrl
+    },
   }
 }
 
